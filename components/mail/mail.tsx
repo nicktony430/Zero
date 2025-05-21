@@ -1,229 +1,306 @@
-"use client"
+"use client";
 
-import * as React from "react"
 import {
-  AlertCircle,
-  Archive,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlignVerticalSpaceAround,
   ArchiveX,
-  File,
-  Inbox,
-  MessagesSquare,
-  Search,
-  Send,
-  ShoppingCart,
-  Trash2,
-  Users2,
-} from "lucide-react"
-
-import { cn } from "@/lib/utils"
-import { Input } from "@/components/ui/input"
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable"
-import { Separator } from "@/components/ui/separator"
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs"
-import { TooltipProvider } from "@/components/ui/tooltip"
-import { AccountSwitcher } from "@/components/mail/account-switcher"
-import { MailDisplay } from "@/components/mail/mail-display"
-import { MailList } from "@/components/mail/mail-list"
-import { Nav } from "@/components/mail/navbar"
-import { type Mail } from "@/components/mail/data"
-import { useMail } from "@/components/mail/use-mail"
+  BellOff,
+  Check,
+  ListFilter,
+  SearchIcon,
+  X,
+} from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { useState, useCallback, useMemo, useEffect, ReactNode } from "react";
+import { ThreadDisplay } from "@/components/mail/thread-display";
+import { useMediaQuery } from "../../hooks/use-media-query";
+import { useSearchValue } from "@/hooks/use-search-value";
+import { MailList } from "@/components/mail/mail-list";
+import { useMail } from "@/components/mail/use-mail";
+import { SidebarToggle } from "../ui/sidebar-toggle";
+import { Skeleton } from "@/components/ui/skeleton";
+import { type Mail } from "@/components/mail/data";
+import { useSearchParams } from "next/navigation";
+import { useThreads } from "@/hooks/use-threads";
+import { Button } from "@/components/ui/button";
+import { useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+import { SearchBar } from "./search-bar";
+import { cn } from "@/lib/utils";
 
 interface MailProps {
   accounts: {
-    label: string
-    email: string
-    icon: React.ReactNode
-  }[]
-  mails: Mail[]
-  defaultLayout: number[] | undefined
-  defaultCollapsed?: boolean
-  navCollapsedSize: number
+    label: string;
+    email: string;
+    icon: ReactNode;
+  }[];
+  folder: string;
+  defaultLayout: number[] | undefined;
+  defaultCollapsed?: boolean;
+  navCollapsedSize: number;
+  muted?: boolean;
 }
 
-export function Mail({
-  accounts,
-  mails,
-  defaultLayout = [20, 32, 48],
-  defaultCollapsed = false,
-  navCollapsedSize,
-}: MailProps) {
-  const [isCollapsed, setIsCollapsed] = React.useState(defaultCollapsed)
-  const [mail] = useMail()
+export function Mail({ folder }: MailProps) {
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchValue] = useSearchValue();
+  const [mail, setMail] = useMail();
+  const [isCompact, setIsCompact] = useState(false);
+  const searchParams = useSearchParams();
+  const [isMobile, setIsMobile] = useState(false);
+  const [filterValue, setFilterValue] = useState<"all" | "unread">("all");
+  const router = useRouter();
+  const { data: session, isPending } = useSession();
+
+  useEffect(() => {
+    if (!session?.user && !isPending) {
+      router.push("/login");
+    }
+  }, [session?.user, isPending]);
+
+  const labels = useMemo(() => {
+    if (filterValue === "all") {
+      if (searchParams.has("category")) {
+        return [`CATEGORY_${searchParams.get("category")!.toUpperCase()}`];
+      }
+      return undefined;
+    }
+    if (filterValue) {
+      if (searchParams.has("category")) {
+        return [
+          filterValue.toUpperCase(),
+          `CATEGORY_${searchParams.get("category")!.toUpperCase()}`,
+        ];
+      }
+      return [filterValue.toUpperCase()];
+    }
+    return undefined;
+  }, [filterValue, searchParams]);
+
+  const {
+    data: threadsResponse,
+    isLoading,
+    isValidating,
+  } = useThreads(searchValue.folder || folder, labels, searchValue.value);
+  const [open, setOpen] = useState(false);
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+
+  // Check if we're on mobile on mount and when window resizes
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 768); // 768px is the 'md' breakpoint
+    };
+
+    checkIsMobile();
+    window.addEventListener("resize", checkIsMobile);
+
+    return () => window.removeEventListener("resize", checkIsMobile);
+  }, []);
+
+  useEffect(() => {
+    if (mail.selected) {
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+  }, [mail.selected]);
+
+  const handleClose = useCallback(() => {
+    setOpen(false);
+    setMail((mail) => ({ ...mail, selected: null }));
+  }, [setMail]);
 
   return (
     <TooltipProvider delayDuration={0}>
-      <ResizablePanelGroup
-        direction="horizontal"
-        onLayout={(sizes: number[]) => {
-          document.cookie = `react-resizable-panels:layout:mail=${JSON.stringify(
-            sizes
-          )}`
-        }}
-        className="h-full max-h-[800px] items-stretch"
-      >
-        <ResizablePanel
-          defaultSize={defaultLayout[0]}
-          collapsedSize={navCollapsedSize}
-          collapsible={true}
-          minSize={15}
-          maxSize={20}
-          onCollapse={() => {
-            setIsCollapsed(true)
-            document.cookie = `react-resizable-panels:collapsed=${JSON.stringify(
-              true
-            )}`
-          }}
-          onResize={() => {
-            setIsCollapsed(false)
-            document.cookie = `react-resizable-panels:collapsed=${JSON.stringify(
-              false
-            )}`
-          }}
-          className={cn(
-            isCollapsed &&
-              "min-w-[50px] transition-all duration-300 ease-in-out"
-          )}
+      <div className="rounded-inherit flex">
+        <ResizablePanelGroup
+          direction="horizontal"
+          autoSaveId="mail-panel-layout"
+          className="rounded-inherit gap-1.5 overflow-hidden"
         >
-          <div
-            className={cn(
-              "flex h-[52px] mt-1 items-center justify-center",
-              isCollapsed ? "h-[52px]" : "px-2"
-            )}
+          <ResizablePanel
+            className="border-none !bg-transparent"
+            defaultSize={isMobile ? 100 : 25}
+            minSize={isMobile ? 100 : 25}
           >
-            <AccountSwitcher isCollapsed={isCollapsed} accounts={accounts} />
-          </div>
-          <Separator />
-          <Nav
-            isCollapsed={isCollapsed}
-            links={[
-              {
-                title: "Inbox",
-                label: "128",
-                icon: Inbox,
-                variant: "default",
-              },
-              {
-                title: "Drafts",
-                label: "9",
-                icon: File,
-                variant: "ghost",
-              },
-              {
-                title: "Sent",
-                label: "",
-                icon: Send,
-                variant: "ghost",
-              },
-              {
-                title: "Junk",
-                label: "23",
-                icon: ArchiveX,
-                variant: "ghost",
-              },
-              {
-                title: "Trash",
-                label: "",
-                icon: Trash2,
-                variant: "ghost",
-              },
-              {
-                title: "Archive",
-                label: "",
-                icon: Archive,
-                variant: "ghost",
-              },
-            ]}
-          />
-          <Separator />
-          <Nav
-            isCollapsed={isCollapsed}
-            links={[
-              {
-                title: "Social",
-                label: "972",
-                icon: Users2,
-                variant: "ghost",
-              },
-              {
-                title: "Updates",
-                label: "342",
-                icon: AlertCircle,
-                variant: "ghost",
-              },
-              {
-                title: "Forums",
-                label: "128",
-                icon: MessagesSquare,
-                variant: "ghost",
-              },
-              {
-                title: "Shopping",
-                label: "8",
-                icon: ShoppingCart,
-                variant: "ghost",
-              },
-              {
-                title: "Promotions",
-                label: "21",
-                icon: Archive,
-                variant: "ghost",
-              },
-            ]}
-          />
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={defaultLayout[1]} minSize={30}>
-          <Tabs defaultValue="all">
-            <div className="flex items-center px-4 py-2">
-              <h1 className="text-xl font-bold">Inbox</h1>
-              <TabsList className="ml-auto">
-                <TabsTrigger
-                  value="all"
-                  className="text-zinc-600 dark:text-zinc-200"
+            <div className="flex-1 flex-col overflow-y-auto bg-card shadow-sm md:flex md:rounded-2xl md:border md:shadow-sm">
+              <div
+                className={cn(
+                  "sticky top-0 z-10 flex items-center justify-between gap-1.5 border-b-2 p-2 transition-colors",
+                  isValidating ? "border-b-green-500" : "border-b-transparent",
+                )}
+              >
+                <SidebarToggle className="h-fit px-2" />
+                <Button
+                  variant="ghost"
+                  className="md:h-fit md:px-2"
+                  onClick={() => setIsCompact(!isCompact)}
                 >
-                  All mail
-                </TabsTrigger>
-                <TabsTrigger
-                  value="unread"
-                  className="text-zinc-600 dark:text-zinc-200"
-                >
-                  Unread
-                </TabsTrigger>
-              </TabsList>
+                  <AlignVerticalSpaceAround />
+                </Button>
+                {searchMode && (
+                  <div className="flex flex-1 items-center justify-center gap-1.5">
+                    <SearchBar />
+                    <Button
+                      variant="ghost"
+                      className="md:h-fit md:px-2"
+                      onClick={() => setSearchMode(false)}
+                    >
+                      <X />
+                    </Button>
+                  </div>
+                )}
+                {!searchMode && (
+                  <>
+                    {mail.bulkSelected.length > 0 ? (
+                      <>
+                        <div className="flex flex-1 items-center justify-center">
+                          <span className="text-sm font-medium tabular-nums">
+                            {mail.bulkSelected.length} selected
+                          </span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="ml-1.5 h-8 w-fit px-2 text-muted-foreground"
+                                onClick={() => setMail({ ...mail, bulkSelected: [] })}
+                              >
+                                <X />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Clear Selection</TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <BulkSelectActions />
+                      </>
+                    ) : (
+                      <>
+                        <h1 className="flex-1 text-center text-sm font-medium capitalize">
+                          {folder}
+                        </h1>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="ghost"
+                            className="md:h-fit md:px-2"
+                            onClick={() => setSearchMode(true)}
+                          >
+                            <SearchIcon />
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+                {mail.bulkSelected.length === 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="md:h-fit md:px-2">
+                        <ListFilter className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setFilterValue("all")}>
+                        All mail {filterValue === "all" && <Check />}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setFilterValue("unread")}>
+                        Unread {filterValue === "unread" && <Check />}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
+              <div className="h-[calc(100dvh-56px)] overflow-hidden pt-0 md:h-[calc(100dvh-(8px+8px+14px+44px))]">
+                {isLoading ? (
+                  <div className="flex flex-col">
+                    {[...Array(8)].map((_, i) => (
+                      <div key={i} className="flex flex-col px-4 py-3">
+                        <div className="flex w-full items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="h-4 w-24" />
+                          </div>
+                          <Skeleton className="h-3 w-12" />
+                        </div>
+                        <Skeleton className="mt-2 h-3 w-32" />
+                        <Skeleton className="mt-2 h-3 w-full" />
+                        <div className="mt-2 flex gap-2">
+                          <Skeleton className="h-4 w-16 rounded-full" />
+                          <Skeleton className="h-4 w-16 rounded-full" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <MailList
+                    items={threadsResponse?.threads || []}
+                    isCompact={isCompact}
+                    folder={folder}
+                  />
+                )}
+              </div>
             </div>
-            <Separator />
-            <div className="bg-background/95 p-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-              <form>
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search" className="pl-8" />
+          </ResizablePanel>
+
+          {isDesktop && mail.selected && (
+            <>
+              <ResizableHandle className="opacity-0" />
+              <ResizablePanel
+                className="shadow-sm md:flex md:rounded-2xl md:border md:shadow-sm"
+                defaultSize={75}
+                minSize={25}
+              >
+                <div className="hidden h-[calc(100vh-(12px+14px))] flex-1 md:block">
+                  <ThreadDisplay mail={mail.selected} onClose={handleClose} />
                 </div>
-              </form>
-            </div>
-            <TabsContent value="all" className="m-0">
-              <MailList items={mails} />
-            </TabsContent>
-            <TabsContent value="unread" className="m-0">
-              <MailList items={mails.filter((item) => !item.read)} />
-            </TabsContent>
-          </Tabs>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={defaultLayout[2]} minSize={30}>
-          <MailDisplay
-            mail={mails.find((item) => item.id === mail.selected) || null}
-          />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
+
+        {/* Mobile Drawer */}
+        {isMobile && (
+          <Drawer open={open} onOpenChange={setOpen}>
+            <DrawerContent className="h-[calc(100vh-3rem)] bg-card p-0">
+              <DrawerHeader className="sr-only">
+                <DrawerTitle>Email Details</DrawerTitle>
+              </DrawerHeader>
+              <div className="flex h-full flex-col overflow-hidden">
+                <ThreadDisplay mail={mail.selected} onClose={handleClose} isMobile={true} />
+              </div>
+            </DrawerContent>
+          </Drawer>
+        )}
+      </div>
     </TooltipProvider>
-  )
+  );
+}
+
+function BulkSelectActions() {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" className="md:h-fit md:px-2">
+            <BellOff />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Mute</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" className="md:h-fit md:px-2">
+            <ArchiveX />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Move to Junk</TooltipContent>
+      </Tooltip>
+    </div>
+  );
 }

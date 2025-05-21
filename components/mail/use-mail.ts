@@ -1,15 +1,17 @@
-import { atom, useAtom } from "jotai"
+import { atom, useAtom } from "jotai";
 
-import { Mail, mails } from "@/components/mail/data"
+import { Mail } from "@/components/mail/data";
 
 type Config = {
-  selected: Mail["id"] | null
-}
+  selected: Mail["id"] | null;
+  bulkSelected: Mail["id"][];
+};
 
 const configAtom = atom<Config>({
-  selected: mails[0].id,
-})
+  selected: null,
+  bulkSelected: [],
+});
 
 export function useMail() {
-  return useAtom(configAtom)
+  return useAtom(configAtom);
 }

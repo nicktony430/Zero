@@ -1,43 +1,20 @@
-import { cookies } from "next/headers"
-import Image from "next/image"
+"use client";
 
-import { Mail } from "@/components/mail/mail"
-import { accounts, mails } from "@/components/mail/data"
+import HeroImage from "@/components/home/hero-image";
+import Navbar from "@/components/home/navbar";
+import Hero from "@/components/home/hero";
 
-export default function MailPage() {
-  const layout = cookies().get("react-resizable-panels:layout:mail")
-  const collapsed = cookies().get("react-resizable-panels:collapsed")
-
-  const defaultLayout = layout ? JSON.parse(layout.value) : undefined
-  const defaultCollapsed = collapsed ? JSON.parse(collapsed.value) : undefined
-
+export default function Home() {
   return (
-    <div className="border rounded-xl m-12">
-      <div className="md:hidden">
-        <Image
-          src="/examples/mail-dark.png"
-          width={1280}
-          height={727}
-          alt="Mail"
-          className="hidden dark:block"
-        />
-        <Image
-          src="/examples/mail-light.png"
-          width={1280}
-          height={727}
-          alt="Mail"
-          className="block dark:hidden"
-        />
-      </div>
-      <div className="hidden flex-col md:flex">
-        <Mail
-          accounts={accounts}
-          mails={mails}
-          defaultLayout={defaultLayout}
-          defaultCollapsed={defaultCollapsed}
-          navCollapsedSize={4}
-        />
+    <div className="relative h-screen min-h-screen w-full overflow-hidden bg-grid-small-black/[0.09] dark:bg-grid-small-white/[0.025]">
+      {/* <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="h-[500px] w-[500px] rounded-full bg-gradient-to-r from-orange-500/10 via-pink-500/10 to-purple-500/10 blur-[120px]" />
+      </div> */}
+      <div className="relative mx-auto mb-4 flex max-w-7xl flex-col">
+        <Navbar />
+        <Hero />
+        <HeroImage />
       </div>
     </div>
-  )
+  );
 }
